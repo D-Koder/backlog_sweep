@@ -127,8 +127,10 @@ jobs:
       - name: Advance reset schedule by 7 days
         shell: bash
         run: |
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch origin develop
           git checkout develop
-          git pull --rebase origin develop
+          git reset --hard origin/develop
           RESET_EPOCH="${{ needs.check-window.outputs.reset_epoch }}"
           NEW_EPOCH=$((RESET_EPOCH + 7*86400))
           NEW_LOCAL=$(TZ='Australia/Melbourne' date -d @$NEW_EPOCH '+%d/%m/%Y %I:%M%p')
