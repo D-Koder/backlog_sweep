@@ -1,1 +1,551 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backlog Sweep — Control Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F14;
+    --panel:#121922;
+    --panel-2:#0F151D;
+    --border:#22303C;
+    --text:#E6EDF3;
+    --muted:#7E8C99;
+    --accent:#F5A623;
+    --accent-dim:#8A5E12;
+    --success:#3FB950;
+    --danger:#F85149;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 10% -10%, #17202B 0%, transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:20px 16px 60px;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:720px;margin:0 auto;}
+
+  header{margin-bottom:18px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 4px;
+  }
+  h1{
+    font-size:26px;
+    font-weight:700;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  .sub{color:var(--muted);font-size:13px;margin-top:4px;}
+
+  /* Status strip — the signature element: a live dispatch clock */
+  .status{
+    margin-top:18px;
+    border:1px solid var(--border);
+    background:linear-gradient(180deg,#141C26,#0F151D);
+    border-radius:10px;
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .status-left{display:flex;align-items:center;gap:10px;}
+  .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--muted);
+    box-shadow:0 0 0 3px rgba(126,140,153,.15);
+    flex-shrink:0;
+  }
+  .dot.active{background:var(--success);box-shadow:0 0 0 4px rgba(63,185,80,.18);animation:pulse 1.6s infinite;}
+  .dot.soon{background:var(--accent);box-shadow:0 0 0 4px rgba(245,166,35,.18);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .status-label{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+  .status-value{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;}
+  .status-time{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);}
+
+  .card{
+    border:1px solid var(--border);
+    background:var(--panel);
+    border-radius:12px;
+    padding:18px;
+    margin-top:16px;
+  }
+  .card h2{
+    font-size:14px;
+    margin:0 0 14px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .card h2 .n{color:var(--accent);}
+
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=date], select, textarea{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:7px;
+    padding:10px 11px;
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-size:14px;
+  }
+  textarea{resize:vertical;min-height:60px;}
+  input:focus, select:focus, textarea:focus{
+    outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(245,166,35,.14);
+  }
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+
+  button{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-weight:600;
+    font-size:14px;
+    border:none;
+    border-radius:7px;
+    padding:11px 16px;
+    cursor:pointer;
+    transition:transform .08s ease, opacity .15s ease;
+  }
+  button:active{transform:scale(.98);}
+  .btn-primary{background:var(--accent);color:#1A1206;}
+  .btn-primary:hover{opacity:.92;}
+  .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}
+  .btn-ghost:hover{border-color:var(--muted);}
+  .btn-danger{background:transparent;border:1px solid rgba(248,81,73,.4);color:var(--danger);padding:6px 10px;font-size:12px;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  .full{width:100%;margin-top:14px;}
+
+  .msg{font-size:13px;margin-top:10px;font-family:'IBM Plex Mono',monospace;}
+  .msg.ok{color:var(--success);}
+  .msg.err{color:var(--danger);}
+  .msg.pending{color:var(--muted);}
+
+  /* Queue list */
+  .tier{margin-bottom:16px;}
+  .tier:last-child{margin-bottom:0;}
+  .tier-title{
+    font-size:12px;font-weight:600;color:var(--muted);
+    margin-bottom:6px;letter-spacing:.03em;
+  }
+  .item{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:9px 11px;
+    margin-bottom:6px;
+    font-size:13px;
+  }
+  .item span{line-height:1.4;}
+  .empty{color:var(--muted);font-size:13px;font-style:italic;}
+
+  .settings-toggle{
+    background:none;border:none;color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:12px;
+    cursor:pointer;text-decoration:underline;padding:0;margin-top:14px;
+  }
+  .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;}
+  .hint a{color:var(--accent);}
+
+  footer{text-align:center;color:var(--muted);font-size:11px;margin-top:26px;font-family:'IBM Plex Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">// backlog_sweep</p>
+    <h1>Control Portal</h1>
+    <p class="sub">Queue ideas and set the next reset time — the overnight sweep reads directly from here.</p>
+  </header>
+
+  <div class="status">
+    <div class="status-left">
+      <div class="dot" id="statusDot"></div>
+      <div>
+        <div class="status-label">Next window</div>
+        <div class="status-value" id="statusValue">—</div>
+      </div>
+    </div>
+    <div class="status-time mono" id="statusTime">reset: —</div>
+  </div>
+
+  <!-- SETTINGS (shown until configured) -->
+  <div class="card" id="settingsCard" style="display:none;">
+    <h2><span class="n">01</span> Connect your repo</h2>
+    <label for="ghOwner">Repo owner / username</label>
+    <input type="text" id="ghOwner" placeholder="D-Koder">
+    <label for="ghRepo">Repo name</label>
+    <input type="text" id="ghRepo" placeholder="backlog_sweep">
+    <label for="ghBranch">Branch</label>
+    <input type="text" id="ghBranch" value="develop">
+    <label for="ghToken">GitHub token</label>
+    <input type="text" id="ghToken" placeholder="github_pat_...">
+    <p class="hint">
+      Use a fine-grained token scoped to just this repo, with <b>Contents: Read and write</b> permission only.
+      Create one at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens</a>.
+      This is stored in your private portal storage — not shared with anyone else who might use this page.
+    </p>
+    <button class="btn-primary full" onclick="saveSettings()">Save & connect</button>
+    <div class="msg" id="settingsMsg"></div>
+  </div>
+
+  <div id="mainUI" style="display:none;">
+
+    <!-- ADD TO BACKLOG -->
+    <div class="card">
+      <h2><span class="n">01</span> Queue an idea</h2>
+      <label for="itemText">What needs doing</label>
+      <textarea id="itemText" placeholder="e.g. Add retry logic to the fetch layer"></textarea>
+      <div class="row">
+        <div>
+          <label for="itemTier">Priority</label>
+          <select id="itemTier">
+            <option value="🔴 High value">🔴 High</option>
+            <option value="🟡 Medium value">🟡 Medium</option>
+            <option value="🟢 Low value / nice-to-have">🟢 Low</option>
+          </select>
+        </div>
+        <div>
+          <label for="itemCategory">Category</label>
+          <select id="itemCategory">
+            <option value="♻️">♻️ Refactor</option>
+            <option value="🔬">🔬 Research</option>
+            <option value="🐛">🐛 Bug</option>
+            <option value="🧪">🧪 Tests</option>
+            <option value="🔍">🔍 Code review</option>
+            <option value="🏗️">🏗️ Architecture</option>
+            <option value="⚡">⚡ Performance</option>
+            <option value="📚">📚 Docs</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-primary full" onclick="addItem()" id="addBtn">Add to backlog</button>
+      <div class="msg" id="addMsg"></div>
+    </div>
+
+    <!-- UPDATE SCHEDULE -->
+    <div class="card">
+      <h2><span class="n">02</span> Set next reset time</h2>
+      <p class="hint" style="margin-top:-6px;margin-bottom:10px;">From Settings → Usage in Claude. Melbourne local time.</p>
+      <div class="row">
+        <div>
+          <label for="resetDate">Date</label>
+          <input type="date" id="resetDate">
+        </div>
+        <div>
+          <label for="resetTime">Time</label>
+          <input type="text" id="resetTime" placeholder="02:00PM">
+        </div>
+      </div>
+      <button class="btn-primary full" onclick="updateSchedule()" id="scheduleBtn">Update reset time</button>
+      <div class="msg" id="scheduleMsg"></div>
+    </div>
+
+    <!-- CURRENT QUEUE -->
+    <div class="card">
+      <h2><span class="n">03</span> Current queue <button class="btn-ghost" style="margin-left:auto;padding:4px 10px;font-size:11px;" onclick="loadBacklog()">Refresh</button></h2>
+      <div id="queueList"><p class="empty">Loading…</p></div>
+    </div>
+
+    <button class="settings-toggle" onclick="toggleSettings()">Repo settings</button>
+  </div>
+
+  <footer>backlog_sweep control portal · writes directly to your repo</footer>
+</div>
+
+<script>
+let settings = null;
+
+async function loadSettings(){
+  try{
+    const r = await window.storage.get('gh-settings', false);
+    if(r && r.value){ settings = JSON.parse(r.value); }
+  }catch(e){ settings = null; }
+  if(settings && settings.token && settings.owner && settings.repo){
+    document.getElementById('settingsCard').style.display='none';
+    document.getElementById('mainUI').style.display='block';
+    initDashboard();
+  } else {
+    document.getElementById('settingsCard').style.display='block';
+    document.getElementById('mainUI').style.display='none';
+  }
+}
+
+async function saveSettings(){
+  const owner = document.getElementById('ghOwner').value.trim();
+  const repo = document.getElementById('ghRepo').value.trim();
+  const branch = document.getElementById('ghBranch').value.trim() || 'develop';
+  const token = document.getElementById('ghToken').value.trim();
+  const msgEl = document.getElementById('settingsMsg');
+  if(!owner || !repo || !token){
+    msgEl.textContent = 'Fill in owner, repo, and token.';
+    msgEl.className = 'msg err';
+    return;
+  }
+  settings = {owner, repo, branch, token};
+  try{
+    await window.storage.set('gh-settings', JSON.stringify(settings), false);
+    msgEl.textContent = 'Connected.';
+    msgEl.className = 'msg ok';
+    setTimeout(()=>{
+      document.getElementById('settingsCard').style.display='none';
+      document.getElementById('mainUI').style.display='block';
+      initDashboard();
+    }, 400);
+  }catch(e){
+    msgEl.textContent = 'Could not save settings: ' + e.message;
+    msgEl.className = 'msg err';
+  }
+}
+
+function toggleSettings(){
+  const card = document.getElementById('settingsCard');
+  if(card.style.display === 'none'){
+    document.getElementById('ghOwner').value = settings.owner || '';
+    document.getElementById('ghRepo').value = settings.repo || '';
+    document.getElementById('ghBranch').value = settings.branch || 'develop';
+    document.getElementById('ghToken').value = settings.token || '';
+    card.style.display = 'block';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+function initDashboard(){
+  loadBacklog();
+  loadScheduleStatus();
+  setInterval(loadScheduleStatus, 60000);
+}
+
+// ---- GitHub API helpers ----
+function b64EncodeUnicode(str){
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (m,p)=>String.fromCharCode('0x'+p)));
+}
+function b64DecodeUnicode(str){
+  return decodeURIComponent(atob(str).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+
+async function ghGetFile(path){
+  const url = `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${path}?ref=${settings.branch}`;
+  const res = await fetch(url, {
+    headers:{ 'Authorization': `Bearer ${settings.token}`, 'Accept':'application/vnd.github+json' }
+  });
+  if(!res.ok){ throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`); }
+  const data = await res.json();
+  return { content: b64DecodeUnicode(data.content), sha: data.sha };
+}
+
+async function ghPutFile(path, newContent, sha, message){
+  const url = `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${path}`;
+  const res = await fetch(url, {
+    method:'PUT',
+    headers:{ 'Authorization': `Bearer ${settings.token}`, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      message, content: b64EncodeUnicode(newContent), sha, branch: settings.branch
+    })
+  });
+  if(!res.ok){
+    const err = await res.json().catch(()=>({}));
+    throw new Error(`PUT ${path} failed: ${res.status} ${err.message || res.statusText}`);
+  }
+  return res.json();
+}
+
+// ---- Backlog ----
+function parseBacklog(content){
+  const lines = content.split('\n');
+  const sections = [];
+  let current = null;
+  lines.forEach((line, i) => {
+    const m = line.match(/^##\s+(.+)$/);
+    if(m){ current = {header: m[1].trim(), items: []}; sections.push(current); }
+    else if(current && line.trim().startsWith('- [')){ current.items.push({text: line, idx: i}); }
+  });
+  return { lines, sections };
+}
+
+async function loadBacklog(){
+  const el = document.getElementById('queueList');
+  el.innerHTML = '<p class="empty">Loading…</p>';
+  try{
+    const { content } = await ghGetFile('CLAUDE_BACKLOG.md');
+    const { sections } = parseBacklog(content);
+    const show = sections.filter(s => !/^Done$/i.test(s.header.replace(/[^\w\s]/g,'').trim()));
+    if(show.length === 0){ el.innerHTML = '<p class="empty">No sections found.</p>'; return; }
+    el.innerHTML = show.map(s => `
+      <div class="tier">
+        <div class="tier-title">${escapeHtml(s.header)}</div>
+        ${ s.items.length
+            ? s.items.map(it => `<div class="item"><span>${escapeHtml(it.text.replace(/^- \[[ x]\]\s*/,''))}</span></div>`).join('')
+            : '<p class="empty">Empty</p>' }
+      </div>
+    `).join('');
+  }catch(e){
+    el.innerHTML = `<p class="msg err">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function addItem(){
+  const text = document.getElementById('itemText').value.trim();
+  const tier = document.getElementById('itemTier').value;
+  const category = document.getElementById('itemCategory').value;
+  const msgEl = document.getElementById('addMsg');
+  const btn = document.getElementById('addBtn');
+  if(!text){ msgEl.textContent='Enter a task first.'; msgEl.className='msg err'; return; }
+
+  btn.disabled = true;
+  msgEl.textContent = 'Writing to repo…';
+  msgEl.className = 'msg pending';
+
+  try{
+    const { content, sha } = await ghGetFile('CLAUDE_BACKLOG.md');
+    const { lines, sections } = parseBacklog(content);
+    const section = sections.find(s => s.header === tier);
+    if(!section){ throw new Error(`Couldn't find section "${tier}" in CLAUDE_BACKLOG.md`); }
+
+    const newLine = `- [ ] ${text} — ${category}`;
+    let endIdx = lines.length;
+    for(let i = section.items.length ? section.items[0].idx : 0; i < lines.length; i++){
+      if(/^##\s/.test(lines[i]) && lines[i] !== `## ${section.header}`){ endIdx = i; break; }
+    }
+    const insertAt = section.items.length ? section.items[0].idx : endIdx;
+    lines.splice(insertAt, 0, newLine);
+    const newContent = lines.join('\n');
+
+    await ghPutFile('CLAUDE_BACKLOG.md', newContent, sha, `Add backlog item: ${text.slice(0,60)}`);
+    msgEl.textContent = 'Added.';
+    msgEl.className = 'msg ok';
+    document.getElementById('itemText').value = '';
+    loadBacklog();
+  }catch(e){
+    msgEl.textContent = e.message;
+    msgEl.className = 'msg err';
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// ---- Schedule ----
+function parseScheduleLine(content){
+  const lines = content.split('\n');
+  for(let i = lines.length - 1; i >= 0; i--){
+    const t = lines[i].trim();
+    if(t && !t.startsWith('#')) return { value: t, idx: i, lines };
+  }
+  return { value: null, idx: -1, lines };
+}
+
+function toEpochFromLocal(ddmmyyyy_hhmmAP){
+  // "18/08/2026 10:10PM" -> approximate epoch treating as local browser time (best-effort for the countdown display only)
+  const m = ddmmyyyy_hhmmAP.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(AM|PM)$/i);
+  if(!m) return null;
+  let [, dd, mm, yyyy, hh, min, ap] = m;
+  hh = parseInt(hh,10);
+  if(ap.toUpperCase()==='PM' && hh !== 12) hh += 12;
+  if(ap.toUpperCase()==='AM' && hh === 12) hh = 0;
+  // Interpret as UTC+10 (AEST) fixed approximation for the on-screen countdown only
+  const utcMs = Date.UTC(parseInt(yyyy), parseInt(mm)-1, parseInt(dd), hh, parseInt(min)) - (10*3600*1000);
+  return utcMs;
+}
+
+async function loadScheduleStatus(){
+  try{
+    const { content } = await ghGetFile('config/reset-schedule.txt');
+    const { value } = parseScheduleLine(content);
+    document.getElementById('statusTime').textContent = `reset: ${value || '—'}`;
+    const epoch = value ? toEpochFromLocal(value) : null;
+    const dot = document.getElementById('statusDot');
+    const statusValue = document.getElementById('statusValue');
+    if(epoch === null){
+      dot.className = 'dot'; statusValue.textContent = 'unknown';
+      return;
+    }
+    const now = Date.now();
+    const startMs = epoch - 3*3600*1000;
+    const stopMs = epoch - 10*60*1000;
+    if(now >= startMs && now < stopMs){
+      dot.className = 'dot active'; statusValue.textContent = 'sweep window open';
+    } else if(now < startMs){
+      const diff = startMs - now;
+      dot.className = diff < 3600*1000 ? 'dot soon' : 'dot';
+      statusValue.textContent = `opens in ${formatDuration(diff)}`;
+    } else {
+      dot.className = 'dot'; statusValue.textContent = 'window closed — awaiting advance';
+    }
+  }catch(e){
+    document.getElementById('statusTime').textContent = 'reset: —';
+    document.getElementById('statusValue').textContent = 'error loading';
+  }
+}
+
+function formatDuration(ms){
+  const h = Math.floor(ms/3600000);
+  const m = Math.floor((ms%3600000)/60000);
+  return `${h}h ${m}m`;
+}
+
+async function updateSchedule(){
+  const dateVal = document.getElementById('resetDate').value; // yyyy-mm-dd
+  const timeVal = document.getElementById('resetTime').value.trim().toUpperCase(); // e.g. 02:00PM
+  const msgEl = document.getElementById('scheduleMsg');
+  const btn = document.getElementById('scheduleBtn');
+
+  if(!dateVal || !/^\d{2}:\d{2}(AM|PM)$/.test(timeVal)){
+    msgEl.textContent = 'Enter a date and a time like 02:00PM.';
+    msgEl.className = 'msg err';
+    return;
+  }
+  const [yyyy, mm, dd] = dateVal.split('-');
+  const newValue = `${dd}/${mm}/${yyyy} ${timeVal}`;
+
+  btn.disabled = true;
+  msgEl.textContent = 'Writing to repo…';
+  msgEl.className = 'msg pending';
+
+  try{
+    const { content, sha } = await ghGetFile('config/reset-schedule.txt');
+    const { lines, idx } = parseScheduleLine(content);
+    if(idx === -1){ lines.push(newValue); } else { lines[idx] = newValue; }
+    const newContent = lines.join('\n');
+    await ghPutFile('config/reset-schedule.txt', newContent, sha, `Update reset schedule to ${newValue}`);
+    msgEl.textContent = 'Schedule updated.';
+    msgEl.className = 'msg ok';
+    loadScheduleStatus();
+  }catch(e){
+    msgEl.textContent = e.message;
+    msgEl.className = 'msg err';
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+loadSettings();
+</script>
+</body>
+</html>
