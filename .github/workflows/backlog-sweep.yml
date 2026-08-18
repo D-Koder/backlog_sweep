@@ -112,7 +112,7 @@ jobs:
             - Update CLAUDE_BACKLOG.md: mark items done or move to
               "In Review".
             - Don't invent filler work if the backlog is thin.
-          claude_args: '--max-turns 60'
+          claude_args: '--max-turns 60 --allowedTools "WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh:*)"'
 
       - name: Post summary to Actions run
         if: always()
