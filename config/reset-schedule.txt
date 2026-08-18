@@ -3,4 +3,4 @@
 # EDIT THIS whenever your reset time in Settings > Usage changes.
 # Auto-advanced by +7 days after each successful sweep (DST handled
 # automatically).
-18/08/2026 11:00PM
+25/08/2026 11:00PM
