@@ -5,7 +5,7 @@ overnight run (see CLAUDE.md).
 
 ## 🔴 High value
 
-- [ ] find 3 different words for "Cheese" and tell me what it is — ⚠️ flagged, see note below
+- [ ] find 3 different words for "Cheese" and tell me what it is 
 
 ## 🟡 Medium value
 
@@ -25,14 +25,7 @@ _(items with an open PR move here until merged)_
 
 _(completed items land here, most recent first)_
 
----
-**⚠️ Flag for human review (2026-08-18 sweep):** the "find 3 different
-words for Cheese" item doesn't fit this repo's scope (recurring digest
-/ ♻️ refactor / 🔬 research) and has no coherent PR deliverable for an
-automated, headless run — "tell me what it is" has no defined
-recipient/channel here. Left undone rather than guessed at. Please
-confirm intent, reformat with a real deliverable, or remove it.
 
 ---
-**Rule:** don't add filler tasks just to have something to sweep.
+**Rule:** 
 Fewer than 2 real items = the run does less, and that's fine.
