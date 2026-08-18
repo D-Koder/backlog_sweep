@@ -37,9 +37,11 @@ requests permissions the workflow needs.
 
 ### 5. Set your reset time
 Open `config/reset-schedule.txt` and put in the exact date + time of
-your next weekly reset (from Settings → Usage), in **UTC, ISO 8601**
-format, e.g. `2026-08-20T04:00:00Z`. A placeholder is already in there
-— confirm or correct it.
+your next weekly reset (from Settings → Usage), **Melbourne local
+time**, format `DD/MM/YYYY HH:MMAM` or `DD/MM/YYYY HH:MMPM`, e.g.
+`18/08/2026 10:10PM`. A placeholder is already in there — confirm or
+correct it. Daylight saving is handled automatically, no need to
+adjust for it yourself.
 
 ### 6. Fill in `CLAUDE.md` and `CLAUDE_BACKLOG.md`
 See `INTAKE_TEMPLATE.md` for questions to answer for each project
@@ -72,9 +74,9 @@ before the first unattended run.
    file again with the new value.
 
 ## Updating the reset time later
-Just edit `config/reset-schedule.txt` with the new UTC timestamp,
-commit, and push. Next poll picks it up — no workflow file changes
-needed.
+Just edit `config/reset-schedule.txt` with the new date/time (same
+`DD/MM/YYYY HH:MMAM/PM` format), commit, and push. Next poll picks it
+up — no workflow file changes needed.
 
 ## A cost note on the 15-minute check
 If this repo is **private**, GitHub Actions free-tier minutes are

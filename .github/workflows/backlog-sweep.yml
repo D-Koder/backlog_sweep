@@ -20,7 +20,7 @@ jobs:
     outputs:
       run_sweep: ${{ steps.check.outputs.run_sweep }}
       deadline: ${{ steps.check.outputs.deadline }}
-      reset_iso: ${{ steps.check.outputs.reset_iso }}
+      reset_epoch: ${{ steps.check.outputs.reset_epoch }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,14 +28,35 @@ jobs:
 
       - name: Check if we're in the start window
         id: check
+        shell: bash
         run: |
-          RESET_ISO=$(grep -v '^#' config/reset-schedule.txt | grep -v '^[[:space:]]*$' | head -1 | tr -d ' \r')
-          RESET_EPOCH=$(date -u -d "$RESET_ISO" +%s)
+          # Read "DD/MM/YYYY HH:MMAM" or "DD/MM/YYYY HH:MMPM" — Melbourne local time.
+          RAW=$(grep -v '^#' config/reset-schedule.txt | grep -v '^[[:space:]]*$' | head -1 | tr -d '\r' | xargs)
+
+          DATE_PART=$(echo "$RAW" | awk '{print $1}')
+          TIME_PART=$(echo "$RAW" | awk '{print $2}')
+
+          DD=$(echo "$DATE_PART" | cut -d/ -f1)
+          MM=$(echo "$DATE_PART" | cut -d/ -f2)
+          YYYY=$(echo "$DATE_PART" | cut -d/ -f3)
+
+          AMPM=$(echo "${TIME_PART: -2}" | tr '[:lower:]' '[:upper:]')
+          HHMM="${TIME_PART%??}"
+          HH=$(echo "$HHMM" | cut -d: -f1)
+          MIN=$(echo "$HHMM" | cut -d: -f2)
+
+          HH=$((10#$HH))
+          if [ "$AMPM" = "PM" ] && [ "$HH" -ne 12 ]; then HH=$((HH + 12)); fi
+          if [ "$AMPM" = "AM" ] && [ "$HH" -eq 12 ]; then HH=0; fi
+          HH24=$(printf "%02d" "$HH")
+
+          LOCAL_STR="${YYYY}-${MM}-${DD} ${HH24}:${MIN}:00"
+          RESET_EPOCH=$(TZ='Australia/Melbourne' date -d "$LOCAL_STR" +%s)
           NOW_EPOCH=$(date -u +%s)
           START_EPOCH=$((RESET_EPOCH - 3*3600))
           STOP_EPOCH=$((RESET_EPOCH - 600))   # 10 min before reset
 
-          echo "Reset:  $RESET_ISO"
+          echo "Reset (as read): $RAW  ->  Melbourne local: $LOCAL_STR"
           echo "Now:    $(date -u -d @$NOW_EPOCH -Iseconds)"
           echo "Window: $(date -u -d @$START_EPOCH -Iseconds) -> $(date -u -d @$STOP_EPOCH -Iseconds)"
 
@@ -43,7 +64,7 @@ jobs:
             echo "In window — running sweep."
             echo "run_sweep=true" >> "$GITHUB_OUTPUT"
             echo "deadline=$(date -u -d @$STOP_EPOCH '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
-            echo "reset_iso=$RESET_ISO" >> "$GITHUB_OUTPUT"
+            echo "reset_epoch=$RESET_EPOCH" >> "$GITHUB_OUTPUT"
           else
             echo "Not in window — skipping."
             echo "run_sweep=false" >> "$GITHUB_OUTPUT"
@@ -103,20 +124,23 @@ jobs:
           fi
 
       - name: Advance reset schedule by 7 days
+        shell: bash
         run: |
           git checkout develop
           git pull --rebase origin develop
-          RESET_ISO="${{ needs.check-window.outputs.reset_iso }}"
-          NEW_EPOCH=$(( $(date -u -d "$RESET_ISO" +%s) + 7*86400 ))
-          NEW_ISO=$(date -u -d @$NEW_EPOCH -Iseconds | sed 's/+00:00/Z/')
+          RESET_EPOCH="${{ needs.check-window.outputs.reset_epoch }}"
+          NEW_EPOCH=$((RESET_EPOCH + 7*86400))
+          NEW_LOCAL=$(TZ='Australia/Melbourne' date -d @$NEW_EPOCH '+%d/%m/%Y %I:%M%p')
           cat > config/reset-schedule.txt << EOC
-          # Next weekly Claude usage reset, in UTC, ISO 8601 format.
+          # Next weekly Claude usage reset — Melbourne local time.
+          # Format: DD/MM/YYYY HH:MMAM or DD/MM/YYYY HH:MMPM  (e.g. 18/08/2026 10:10PM)
           # EDIT THIS whenever your reset time in Settings > Usage changes.
-          # Auto-advanced by +7 days after each successful sweep.
-          $NEW_ISO
+          # Auto-advanced by +7 days after each successful sweep (DST handled
+          # automatically).
+          $NEW_LOCAL
           EOC
           git config user.name "claude-backlog-sweep-bot"
           git config user.email "actions@github.com"
           git add config/reset-schedule.txt
-          git commit -m "chore: advance next reset to $NEW_ISO" || echo "nothing to commit"
+          git commit -m "chore: advance next reset to $NEW_LOCAL" || echo "nothing to commit"
           git push origin develop
