@@ -33,6 +33,7 @@ Fresh repo, no existing codebase yet. Used for two kinds of work:
 1. Recurring: weekly world news digest (see below)
 2. ♻️ Refactor tasks in the backlog
 3. 🔬 Research tasks in the backlog
+4. any other extra
 
 ## Recurring task: Weekly world news digest
 - Compile interesting world news from the past week.
