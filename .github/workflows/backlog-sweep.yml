@@ -23,6 +23,8 @@ jobs:
       reset_iso: ${{ steps.check.outputs.reset_iso }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: develop
 
       - name: Check if we're in the start window
         id: check
@@ -54,6 +56,8 @@ jobs:
     timeout-minutes: 190   # hard fallback if Claude ignores the soft deadline
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: develop
 
       - name: Run Claude Backlog Sweep
         uses: anthropics/claude-code-action@v1
@@ -100,7 +104,8 @@ jobs:
 
       - name: Advance reset schedule by 7 days
         run: |
-          git pull --rebase
+          git checkout develop
+          git pull --rebase origin develop
           RESET_ISO="${{ needs.check-window.outputs.reset_iso }}"
           NEW_EPOCH=$(( $(date -u -d "$RESET_ISO" +%s) + 7*86400 ))
           NEW_ISO=$(date -u -d @$NEW_EPOCH -Iseconds | sed 's/+00:00/Z/')
@@ -114,4 +119,4 @@ jobs:
           git config user.email "actions@github.com"
           git add config/reset-schedule.txt
           git commit -m "chore: advance next reset to $NEW_ISO" || echo "nothing to commit"
-          git push
+          git push origin develop

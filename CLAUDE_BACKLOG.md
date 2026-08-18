@@ -6,6 +6,7 @@ overnight run (see CLAUDE.md).
 ## 🔴 High value
 
 - [ ] Weekly world news digest — recurring, see CLAUDE.md for format — 🔬
+- [ ] find 3 different words for "Cheese" and tell me what it is
 
 ## 🟡 Medium value
 
