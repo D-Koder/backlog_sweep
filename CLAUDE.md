@@ -1,56 +1,147 @@
-# Project Rules — Backlog_sweep
+name: Claude Backlog Sweep
 
-## What this repo is
-Fresh repo, no existing codebase yet. Used for two kinds of work:
-1. **Recurring content task** — weekly world news digest
-2. **Ongoing dev work** — refactor / research tasks as they get added,
-   tech stack not fixed yet (pick sensibly per task, note the choice
-   in the PR description)
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # polls every 15 min, does nothing unless in window
+  workflow_dispatch: {}       # manual test run — still respects the window check
 
-## When this runs
-- Scheduled overnight via GitHub Actions (~1 hour before weekly Claude
-  usage reset).
-- Hard stop conditions for this run (since live usage can't be checked
-  mid-run):
-  - **Max 2 backlog items completed**, even if time/usage remains
-  - **Max 3 hours** wall-clock (enforced by the workflow's job timeout)
-  - If a Claude usage limit is hit mid-task, the run just stops there —
-    no special handling needed, this happens naturally
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
 
-## Boundaries
-- No restricted files/folders (nothing exists yet).
-- No extra confirmation needed for any action — free to install
-  dependencies, create files/folders, restructure as needed.
+concurrency:
+  group: claude-backlog-sweep
+  cancel-in-progress: false   # let an in-progress sweep finish before the next poll runs
 
-## Verification before opening a PR
-- Run lint if a linter is configured for whatever language was used.
-- No fixed test command yet (empty repo) — if a task adds code, add a
-  basic test alongside it and run it. If a task is pure content
-  (e.g. the news digest), lint isn't applicable — just proofread for
-  broken links/formatting before opening the PR.
+jobs:
+  check-window:
+    runs-on: ubuntu-latest
+    outputs:
+      run_sweep: ${{ steps.check.outputs.run_sweep }}
+      deadline: ${{ steps.check.outputs.deadline }}
+      reset_epoch: ${{ steps.check.outputs.reset_epoch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
 
-## Priorities (highest → lowest)
-1. Recurring: weekly world news digest (see below)
-2. ♻️ Refactor tasks in the backlog
-3. 🔬 Research tasks in the backlog
+      - name: Check if we're in the start window
+        id: check
+        shell: bash
+        run: |
+          # Read "DD/MM/YYYY HH:MMAM" or "DD/MM/YYYY HH:MMPM" — Melbourne local time.
+          RAW=$(grep -v '^#' config/reset-schedule.txt | grep -v '^[[:space:]]*$' | head -1 | tr -d '\r' | xargs)
 
-## Recurring task: Weekly world news digest
-- Compile interesting world news from the past week.
-- Format: short, easy to read, skimmable — headline + 2-3 sentence
-  summary per item, not full articles.
-- Save as a new markdown file: `digests/YYYY-MM-DD.md`
-- Counts as one of the 2 backlog items for the run.
+          DATE_PART=$(echo "$RAW" | awk '{print $1}')
+          TIME_PART=$(echo "$RAW" | awk '{print $2}')
 
-## PR rules
-- Never auto-merge. Always open a PR for review.
-- Target branch: `develop` (subject to change — check this file is
-  still current before each run, in case it's been updated).
+          DD=$(echo "$DATE_PART" | cut -d/ -f1)
+          MM=$(echo "$DATE_PART" | cut -d/ -f2)
+          YYYY=$(echo "$DATE_PART" | cut -d/ -f3)
 
-## After each run
-- Update `CLAUDE_BACKLOG.md`: mark completed items, move anything
-  in-progress to "In Review".
-- Summarize in the PR description: what was done, what's left, any
-  risks or things worth a human double-check.
-- Before the run's hard deadline, write `SWEEP_SUMMARY.md` at the repo
-  root (what got done / attempted / left) and commit it — this is
-  enforced by the workflow, not optional.
+          AMPM=$(echo "${TIME_PART: -2}" | tr '[:lower:]' '[:upper:]')
+          HHMM="${TIME_PART%??}"
+          HH=$(echo "$HHMM" | cut -d: -f1)
+          MIN=$(echo "$HHMM" | cut -d: -f2)
+
+          HH=$((10#$HH))
+          if [ "$AMPM" = "PM" ] && [ "$HH" -ne 12 ]; then HH=$((HH + 12)); fi
+          if [ "$AMPM" = "AM" ] && [ "$HH" -eq 12 ]; then HH=0; fi
+          HH24=$(printf "%02d" "$HH")
+
+          LOCAL_STR="${YYYY}-${MM}-${DD} ${HH24}:${MIN}:00"
+          RESET_EPOCH=$(TZ='Australia/Melbourne' date -d "$LOCAL_STR" +%s)
+          NOW_EPOCH=$(date -u +%s)
+          START_EPOCH=$((RESET_EPOCH - 3*3600))
+          STOP_EPOCH=$((RESET_EPOCH - 600))   # 10 min before reset
+
+          echo "Reset (as read): $RAW  ->  Melbourne local: $LOCAL_STR"
+          echo "Now:    $(date -u -d @$NOW_EPOCH -Iseconds)"
+          echo "Window: $(date -u -d @$START_EPOCH -Iseconds) -> $(date -u -d @$STOP_EPOCH -Iseconds)"
+
+          if [ "$NOW_EPOCH" -ge "$START_EPOCH" ] && [ "$NOW_EPOCH" -lt "$STOP_EPOCH" ]; then
+            echo "In window — running sweep."
+            echo "run_sweep=true" >> "$GITHUB_OUTPUT"
+            echo "deadline=$(date -u -d @$STOP_EPOCH '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+            echo "reset_epoch=$RESET_EPOCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not in window — skipping."
+            echo "run_sweep=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sweep:
+    needs: check-window
+    if: needs.check-window.outputs.run_sweep == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 190   # hard fallback if Claude ignores the soft deadline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Run Claude Backlog Sweep
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read CLAUDE.md for the rules and CLAUDE_BACKLOG.md for the
+            prioritized task list. Run this week's Backlog Sweep.
+
+            HARD DEADLINE: ${{ needs.check-window.outputs.deadline }}.
+            Check the current time periodically (e.g. `date -u`). With
+            roughly 10 minutes left before the deadline:
+              - Stop starting any new work, even mid-task.
+              - Write SWEEP_SUMMARY.md at the repo root with:
+                - What was completed this run
+                - What was attempted but not finished (and why)
+                - What's still in the backlog, unchanged
+                - Any risks or things worth a human double-check
+              - Commit and push SWEEP_SUMMARY.md.
+              - End your turn.
+            This summary step is mandatory even if every task is
+            incomplete — never skip it to squeeze in more work.
+
+            Other rules:
+            - Work highest value → lowest value.
+            - Complete AT MOST 2 backlog items this run.
+            - Test/lint each change per CLAUDE.md before opening a PR.
+            - Never auto-merge. Open a PR against the branch named in
+              CLAUDE.md.
+            - Update CLAUDE_BACKLOG.md: mark items done or move to
+              "In Review".
+            - Don't invent filler work if the backlog is thin.
+          claude_args: '--max-turns 60'
+
+      - name: Post summary to Actions run
+        if: always()
+        run: |
+          echo "## Claude Backlog Sweep — Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f SWEEP_SUMMARY.md ]; then
+            cat SWEEP_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ No SWEEP_SUMMARY.md found. Claude likely hit the hard timeout before it could write one — check the run logs above for what was in progress." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Advance reset schedule by 7 days
+        shell: bash
+        run: |
+          git checkout develop
+          git pull --rebase origin develop
+          RESET_EPOCH="${{ needs.check-window.outputs.reset_epoch }}"
+          NEW_EPOCH=$((RESET_EPOCH + 7*86400))
+          NEW_LOCAL=$(TZ='Australia/Melbourne' date -d @$NEW_EPOCH '+%d/%m/%Y %I:%M%p')
+          cat > config/reset-schedule.txt << EOC
+          # Next weekly Claude usage reset — Melbourne local time.
+          # Format: DD/MM/YYYY HH:MMAM or DD/MM/YYYY HH:MMPM  (e.g. 18/08/2026 10:10PM)
+          # EDIT THIS whenever your reset time in Settings > Usage changes.
+          # Auto-advanced by +7 days after each successful sweep (DST handled
+          # automatically).
+          $NEW_LOCAL
+          EOC
+          git config user.name "claude-backlog-sweep-bot"
+          git config user.email "actions@github.com"
+          git add config/reset-schedule.txt
+          git commit -m "chore: advance next reset to $NEW_LOCAL" || echo "nothing to commit"
+          git push origin develop
