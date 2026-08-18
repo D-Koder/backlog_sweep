@@ -19,11 +19,11 @@ overnight run (see CLAUDE.md).
 
 _(items with an open PR move here until merged)_
 
-- [ ] Weekly world news digest (2026-08-18) — PR open, see `digests/2026-08-18.md`
-
 ## ✅ Done
 
 _(completed items land here, most recent first)_
+
+- [x] Weekly world news digest (2026-08-18) — merged via PR #1, see `digests/2026-08-18.md`
 
 ---
 **⚠️ Flag for human review (2026-08-18 sweep):** the "find 3 different
