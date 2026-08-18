@@ -5,8 +5,7 @@ overnight run (see CLAUDE.md).
 
 ## 🔴 High value
 
-- [ ] Weekly world news digest — recurring, see CLAUDE.md for format — 🔬
-- [ ] find 3 different words for "Cheese" and tell me what it is
+- [ ] find 3 different words for "Cheese" and tell me what it is — ⚠️ flagged, see note below
 
 ## 🟡 Medium value
 
@@ -20,9 +19,19 @@ overnight run (see CLAUDE.md).
 
 _(items with an open PR move here until merged)_
 
+- [ ] Weekly world news digest (2026-08-18) — PR open, see `digests/2026-08-18.md`
+
 ## ✅ Done
 
 _(completed items land here, most recent first)_
+
+---
+**⚠️ Flag for human review (2026-08-18 sweep):** the "find 3 different
+words for Cheese" item doesn't fit this repo's scope (recurring digest
+/ ♻️ refactor / 🔬 research) and has no coherent PR deliverable for an
+automated, headless run — "tell me what it is" has no defined
+recipient/channel here. Left undone rather than guessed at. Please
+confirm intent, reformat with a real deliverable, or remove it.
 
 ---
 **Rule:** don't add filler tasks just to have something to sweep.
