@@ -1,0 +1,117 @@
+name: Claude Backlog Sweep
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # polls every 15 min, does nothing unless in window
+  workflow_dispatch: {}       # manual test run — still respects the window check
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: claude-backlog-sweep
+  cancel-in-progress: false   # let an in-progress sweep finish before the next poll runs
+
+jobs:
+  check-window:
+    runs-on: ubuntu-latest
+    outputs:
+      run_sweep: ${{ steps.check.outputs.run_sweep }}
+      deadline: ${{ steps.check.outputs.deadline }}
+      reset_iso: ${{ steps.check.outputs.reset_iso }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if we're in the start window
+        id: check
+        run: |
+          RESET_ISO=$(grep -v '^#' config/reset-schedule.txt | grep -v '^[[:space:]]*$' | head -1 | tr -d ' \r')
+          RESET_EPOCH=$(date -u -d "$RESET_ISO" +%s)
+          NOW_EPOCH=$(date -u +%s)
+          START_EPOCH=$((RESET_EPOCH - 3*3600))
+          STOP_EPOCH=$((RESET_EPOCH - 600))   # 10 min before reset
+
+          echo "Reset:  $RESET_ISO"
+          echo "Now:    $(date -u -d @$NOW_EPOCH -Iseconds)"
+          echo "Window: $(date -u -d @$START_EPOCH -Iseconds) -> $(date -u -d @$STOP_EPOCH -Iseconds)"
+
+          if [ "$NOW_EPOCH" -ge "$START_EPOCH" ] && [ "$NOW_EPOCH" -lt "$STOP_EPOCH" ]; then
+            echo "In window — running sweep."
+            echo "run_sweep=true" >> "$GITHUB_OUTPUT"
+            echo "deadline=$(date -u -d @$STOP_EPOCH '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+            echo "reset_iso=$RESET_ISO" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not in window — skipping."
+            echo "run_sweep=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sweep:
+    needs: check-window
+    if: needs.check-window.outputs.run_sweep == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 190   # hard fallback if Claude ignores the soft deadline
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Claude Backlog Sweep
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read CLAUDE.md for the rules and CLAUDE_BACKLOG.md for the
+            prioritized task list. Run this week's Backlog Sweep.
+
+            HARD DEADLINE: ${{ needs.check-window.outputs.deadline }}.
+            Check the current time periodically (e.g. `date -u`). With
+            roughly 10 minutes left before the deadline:
+              - Stop starting any new work, even mid-task.
+              - Write SWEEP_SUMMARY.md at the repo root with:
+                - What was completed this run
+                - What was attempted but not finished (and why)
+                - What's still in the backlog, unchanged
+                - Any risks or things worth a human double-check
+              - Commit and push SWEEP_SUMMARY.md.
+              - End your turn.
+            This summary step is mandatory even if every task is
+            incomplete — never skip it to squeeze in more work.
+
+            Other rules:
+            - Work highest value → lowest value.
+            - Complete AT MOST 2 backlog items this run.
+            - Test/lint each change per CLAUDE.md before opening a PR.
+            - Never auto-merge. Open a PR against the branch named in
+              CLAUDE.md.
+            - Update CLAUDE_BACKLOG.md: mark items done or move to
+              "In Review".
+            - Don't invent filler work if the backlog is thin.
+          claude_args: '--max-turns 60'
+
+      - name: Post summary to Actions run
+        if: always()
+        run: |
+          echo "## Claude Backlog Sweep — Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f SWEEP_SUMMARY.md ]; then
+            cat SWEEP_SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ No SWEEP_SUMMARY.md found. Claude likely hit the hard timeout before it could write one — check the run logs above for what was in progress." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Advance reset schedule by 7 days
+        run: |
+          git pull --rebase
+          RESET_ISO="${{ needs.check-window.outputs.reset_iso }}"
+          NEW_EPOCH=$(( $(date -u -d "$RESET_ISO" +%s) + 7*86400 ))
+          NEW_ISO=$(date -u -d @$NEW_EPOCH -Iseconds | sed 's/+00:00/Z/')
+          cat > config/reset-schedule.txt << EOC
+          # Next weekly Claude usage reset, in UTC, ISO 8601 format.
+          # EDIT THIS whenever your reset time in Settings > Usage changes.
+          # Auto-advanced by +7 days after each successful sweep.
+          $NEW_ISO
+          EOC
+          git config user.name "claude-backlog-sweep-bot"
+          git config user.email "actions@github.com"
+          git add config/reset-schedule.txt
+          git commit -m "chore: advance next reset to $NEW_ISO" || echo "nothing to commit"
+          git push

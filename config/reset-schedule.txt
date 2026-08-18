@@ -1,0 +1,8 @@
+# Next weekly Claude usage reset, in UTC, ISO 8601 format.
+# EDIT THIS whenever your reset time in Settings > Usage changes.
+# After each successful sweep, the workflow auto-advances this by +7
+# days, assuming the reset stays on the same weekly cadence.
+#
+# Placeholder below assumes Thursday 2:00 PM Melbourne (AEST, UTC+10)
+# -> CONFIRM OR CORRECT this against your actual Settings > Usage page.
+2026-08-20T04:00:00Z
